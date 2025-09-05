@@ -1,25 +1,55 @@
 #define SENSOR_PIN 34
+#define LED_BAIXO 18
+#define LED_MEDIO 19
+#define LED_ALTO 21
+
+const int LIMITE_BAIXO = 800;  
+const int LIMITE_ALTO = 2000; 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   pinMode(SENSOR_PIN, INPUT);
+  analogReadResolution(12);
+
+  pinMode(LED_BAIXO, OUTPUT);
+  pinMode(LED_MEDIO, OUTPUT);
+  pinMode(LED_ALTO, OUTPUT);
 }
 
 void loop() {
-  int sensorValue = analogRead(SENSOR_PIN);
-  float voltage = sensorValue * (3.3 / 4095.0);
+  long sum = 0;
+  const int readings = 10;
+  
+  for(int i = 0; i < readings; i++) {
+    sum += analogRead(SENSOR_PIN);
+    delay(20);
+  }
+  
+  int sensorValue = sum / readings;
 
-  // Serial.print("Valor analogico ");
-  // Serial.print(" Tensao ");
-  // Serial.println(voltage);
+  Serial.print("Valor: ");
+  Serial.print(sensorValue);
+  Serial.print("/4095 -> ");
 
-  if (sensorValue > 650) {
-    Serial.print("Ambiente está barulhento ");
-    Serial.println(sensorValue);
+  if (sensorValue < LIMITE_BAIXO) {
+    Serial.println("BAIXO");
+    digitalWrite(LED_BAIXO, HIGH);
+    delay(500);   
+    digitalWrite(LED_BAIXO, LOW);
+
+  } else if (sensorValue < LIMITE_ALTO) {
+    Serial.println("MÉDIO");
+    digitalWrite(LED_MEDIO, HIGH);
+    delay(500);
+    digitalWrite(LED_MEDIO, LOW);
+    
+
   } else {
-    Serial.print("Ambiente está tranquilo ");
-    Serial.println(sensorValue);
+    Serial.println("ALTO");
+    digitalWrite(LED_ALTO, HIGH);
+    delay(500);
+    digitalWrite(LED_ALTO, LOW);
   }
 
-  delay(3000);
+  delay(500); 
 }
