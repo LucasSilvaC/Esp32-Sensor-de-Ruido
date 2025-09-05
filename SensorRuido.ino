@@ -1,7 +1,7 @@
 #define SENSOR_PIN 34
-#define LED_BAIXO 18
+#define LED_ALTO 18
 #define LED_MEDIO 19
-#define LED_ALTO 21
+#define LED_BAIXO 21
 
 const int LIMITE_BAIXO = 800;  
 const int LIMITE_ALTO = 2000; 
@@ -42,7 +42,7 @@ void loop() {
     digitalWrite(LED_MEDIO, HIGH);
     delay(500);
     digitalWrite(LED_MEDIO, LOW);
-    
+
 
   } else {
     Serial.println("ALTO");
