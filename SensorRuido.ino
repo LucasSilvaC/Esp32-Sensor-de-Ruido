@@ -1,26 +1,279 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <time.h>
+#include <sys/time.h>
+
+const char* ssid = "SCRM-05";
+const char* password = "12345678";
+
+WebServer server(80);
+
 #define SENSOR_PIN 34
 #define LED_ALTO 18
 #define LED_MEDIO 19
 #define LED_BAIXO 21
 
-const int LIMITE_BAIXO = 90;
+const int LIMITE_BAIXO = 100;
 const int LIMITE_ALTO = 200;
+const unsigned long INTERVALO = 10000; 
 
 unsigned long inicioPeriodo = 0;
-const unsigned long intervalo = 10000;
-
 long somaAmplitudes = 0;
 int contador = 0;
 
+#define MAX_REGISTROS 500
+
+struct Registro {
+  int mediaAmplitude;
+  String dataHora;
+};
+
+Registro registros[MAX_REGISTROS];
+int registroIndex = 0;
+int totalRegistros = 0;
+
+// -------------------- Ajuste de horário --------------------
+void setLocalTimeFromBuild() {
+  struct tm tm_build = {0};
+  strptime(__DATE__ " " __TIME__, "%b %d %Y %H:%M:%S", &tm_build);
+  time_t t = mktime(&tm_build);
+  struct timeval now = { .tv_sec = t };
+  settimeofday(&now, NULL);
+}
+
+// -------------------- Página HTML estilizada --------------------
+void handleRoot() {
+  String html = R"rawliteral(
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="refresh" content="5">
+  <title>Nível de Ruído - SSID 05</title>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(to bottom right, #eff6ff, #e0e7ff);
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .card {
+      width: 90%;
+      max-width: 400px;
+      background: linear-gradient(to bottom right, #dbeafe, #eef2ff);
+      border-radius: 1.2rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      border: 1px solid #bfdbfe;
+      overflow: hidden;
+    }
+
+    .card-header {
+      background: linear-gradient(to right, #2563eb, #4f46e5);
+      color: white;
+      padding: 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .card-header h1 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-header svg {
+      width: 1.5rem;
+      height: 1.5rem;
+    }
+
+    .card-header p {
+      margin: 0;
+      font-size: 0.85rem;
+      color: #bfdbfe;
+    }
+
+    .icon-bg {
+      background: rgba(255,255,255,0.25);
+      padding: 0.75rem;
+      border-radius: 50%;
+    }
+
+    .content {
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    .circle {
+      width: 130px;
+      height: 130px;
+      background: linear-gradient(to bottom right, #3b82f6, #6366f1);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem auto;
+      box-shadow: 0 8px 15px rgba(99,102,241,0.3);
+    }
+
+    .circle span {
+      color: white;
+      font-size: 2.5rem;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #475569;
+      font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+
+    .status {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 1rem;
+    }
+
+    .status-box {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #dcfce7;
+      color: #166534;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-weight: 500;
+      font-size: 0.9rem;
+    }
+
+    .status-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      background: #22c55e;
+      border-radius: 50%;
+      animation: pulse 1.5s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.5; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    .description {
+      background: rgba(255,255,255,0.6);
+      border: 1px solid #bfdbfe;
+      border-radius: 0.75rem;
+      padding: 1rem;
+      color: #334155;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      margin-bottom: 1rem;
+    }
+
+    .footer {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h1>
+          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          </svg>
+          Nível de Ruído
+        </h1>
+        <p>Sensor IoT em tempo real</p>
+      </div>
+      <div class="icon-bg">
+        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="circle">
+        <span>67</span>
+      </div>
+      <p class="subtitle">Decibéis (dB)</p>
+
+      <div class="status">
+        <div class="status-box">
+          <div class="status-dot"></div>
+          <span>Ativo</span>
+        </div>
+      </div>
+
+      <div class="description">
+        Monitoramento de ruído ambiente em tempo real para controle de qualidade e conforto acústico.
+      </div>
+
+      <div class="footer">
+        Última atualização: <!--%HORA%-->
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+  )rawliteral";
+
+  server.send(200, "text/html", html);
+}
+
+
+// -------------------- CSV para download --------------------
+void handleDownload() {
+  String csv = "Data/Hora,Media da Amplitude (10s)\n";
+  if (totalRegistros > 0) {
+    int start = (registroIndex - totalRegistros + MAX_REGISTROS) % MAX_REGISTROS;
+    for (int i = 0; i < totalRegistros; i++) {
+      int idx = (start + i) % MAX_REGISTROS;
+      csv += registros[idx].dataHora + "," + String(registros[idx].mediaAmplitude) + "\n";
+    }
+  }
+  server.sendHeader("Content-Type", "text/csv");
+  server.sendHeader("Content-Disposition", "attachment; filename=\"ruido_medicoes.csv\"");
+  server.send(200, "text/csv", csv);
+}
+
+// -------------------- Setup --------------------
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
-  pinMode(LED_BAIXO, OUTPUT);
-  pinMode(LED_MEDIO, OUTPUT);
   pinMode(LED_ALTO, OUTPUT);
+  pinMode(LED_MEDIO, OUTPUT);
+  pinMode(LED_BAIXO, OUTPUT);
+
+  Serial.println("🔄 Iniciando Access Point...");
+  WiFi.softAP(ssid, password);
+  Serial.print("✅ SSID: "); Serial.println(ssid);
+  Serial.print("📡 IP do ESP32 (AP): "); Serial.println(WiFi.softAPIP());
+
+  setLocalTimeFromBuild();
+
+  server.on("/", handleRoot);
+  server.on("/download", handleDownload);
+  server.begin();
+  Serial.println("🌐 Servidor web iniciado.");
+
   inicioPeriodo = millis();
 }
 
+// -------------------- Loop principal --------------------
 void loop() {
   int valorMin = 4095;
   int valorMax = 0;
@@ -36,12 +289,29 @@ void loop() {
   somaAmplitudes += amplitude;
   contador++;
 
-  if (millis() - inicioPeriodo >= intervalo) {
+  if (millis() - inicioPeriodo >= INTERVALO) {
     int mediaAmplitude = somaAmplitudes / contador;
+    somaAmplitudes = 0;
+    contador = 0;
+    inicioPeriodo = millis();
 
-    Serial.print("Média da amplitude em 10s: ");
+    String dataHora = "N/A";
+    time_t now = time(NULL);
+    struct tm *timeinfo = localtime(&now);
+    if (timeinfo) {
+      char timeStringBuff[64];
+      strftime(timeStringBuff, sizeof(timeStringBuff), "%d/%m/%Y %H:%M:%S", timeinfo);
+      dataHora = String(timeStringBuff);
+    }
+
+    registros[registroIndex].mediaAmplitude = mediaAmplitude;
+    registros[registroIndex].dataHora = dataHora;
+    registroIndex = (registroIndex + 1) % MAX_REGISTROS;
+    if (totalRegistros < MAX_REGISTROS) totalRegistros++;
+
+    Serial.print("📊 Média da amplitude (10s): ");
     Serial.print(mediaAmplitude);
-    Serial.print(" -> ");
+    Serial.print(" → ");
 
     if (mediaAmplitude < LIMITE_BAIXO) {
       Serial.println("BAIXO");
@@ -59,9 +329,7 @@ void loop() {
       delay(500);
       digitalWrite(LED_ALTO, LOW);
     }
-
-    somaAmplitudes = 0;
-    contador = 0;
-    inicioPeriodo = millis();
   }
+
+  server.handleClient();
 }
