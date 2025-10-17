@@ -20,19 +20,20 @@ const unsigned long INTERVALO = 10000;
 unsigned long inicioPeriodo = 0;
 long somaAmplitudes = 0;
 int contador = 0;
+int ultimaMedia = 67; 
 
 #define MAX_REGISTROS 500
 
 struct Registro {
   int mediaAmplitude;
   String dataHora;
+  String status;
 };
 
 Registro registros[MAX_REGISTROS];
 int registroIndex = 0;
 int totalRegistros = 0;
 
-// -------------------- Ajuste de horário --------------------
 void setLocalTimeFromBuild() {
   struct tm tm_build = {0};
   strptime(__DATE__ " " __TIME__, "%b %d %Y %H:%M:%S", &tm_build);
@@ -41,11 +42,17 @@ void setLocalTimeFromBuild() {
   settimeofday(&now, NULL);
 }
 
-// -------------------- Página HTML estilizada --------------------
+String getCircleClass(String status) {
+  if (status == "ALTO") return "circle-orange";
+  if (status == "MÉDIO") return "circle-pink";
+  return "circle-blue";
+}
+
 void handleRoot() {
   String html = R"rawliteral(
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -60,14 +67,15 @@ void handleRoot() {
       justify-content: center;
       align-items: center;
       min-height: 100vh;
+      padding: 20px 0;
     }
 
     .card {
       width: 90%;
-      max-width: 400px;
+      max-width: 450px;
       background: linear-gradient(to bottom right, #dbeafe, #eef2ff);
       border-radius: 1.2rem;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
       border: 1px solid #bfdbfe;
       overflow: hidden;
     }
@@ -102,7 +110,7 @@ void handleRoot() {
     }
 
     .icon-bg {
-      background: rgba(255,255,255,0.25);
+      background: rgba(255, 255, 255, 0.25);
       padding: 0.75rem;
       border-radius: 50%;
     }
@@ -115,7 +123,6 @@ void handleRoot() {
     .circle {
       width: 130px;
       height: 130px;
-      background: linear-gradient(to bottom right, #3b82f6, #6366f1);
       border-radius: 50%;
       display: flex;
       align-items: center;
@@ -124,9 +131,23 @@ void handleRoot() {
       box-shadow: 0 8px 15px rgba(99,102,241,0.3);
     }
 
+    .circle-blue {
+      background: linear-gradient(to bottom right, #3b82f6, #6366f1);
+    }
+
+    .circle-pink {
+      background: linear-gradient(to bottom right, #ec4899, #f472b6);
+      box-shadow: 0 8px 15px rgba(236, 72, 153, 0.3);
+    }
+
+    .circle-orange {
+      background: linear-gradient(to bottom right, #f97316, #fb923c);
+      box-shadow: 0 8px 15px rgba(249, 115, 22, 0.3);
+    }
+
     .circle span {
       color: white;
-      font-size: 2.5rem;
+      font-size: 2rem;
       font-weight: 700;
     }
 
@@ -163,12 +184,21 @@ void handleRoot() {
     }
 
     @keyframes pulse {
-      0%, 100% { opacity: 0.5; transform: scale(0.9); }
-      50% { opacity: 1; transform: scale(1.2); }
+
+      0%,
+      100% {
+        opacity: 0.5;
+        transform: scale(0.9);
+      }
+
+      50% {
+        opacity: 1;
+        transform: scale(1.2);
+      }
     }
 
     .description {
-      background: rgba(255,255,255,0.6);
+      background: rgba(255, 255, 255, 0.6);
       border: 1px solid #bfdbfe;
       border-radius: 0.75rem;
       padding: 1rem;
@@ -178,12 +208,89 @@ void handleRoot() {
       margin-bottom: 1rem;
     }
 
+    .updates-section {
+      margin-top: 2rem;
+      text-align: left;
+    }
+
+    .updates-title {
+      color: #475569;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      text-align: center;
+      font-size: 1.1rem;
+    }
+
+    .update-item {
+      background: rgba(255, 255, 255, 0.7);
+      border: 1px solid #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.85rem;
+    }
+
+    .update-value {
+      font-weight: 600;
+      color: #1e293b;
+    }
+
+    .update-time {
+      color: #64748b;
+      font-size: 0.75rem;
+    }
+
+    .update-status {
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+
+    .status-baixo {
+      background: #dbeafe;
+      color: #1e40af;
+    }
+
+    .status-medio {
+      background: #fce7f3;
+      color: #be185d;
+    }
+
+    .status-alto {
+      background: #fed7aa;
+      color: #c2410c;
+    }
+
+    .download-btn {
+      background: linear-gradient(to right, #2563eb, #4f46e5);
+      color: white;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+      width: 100%;
+      transition: all 0.3s;
+    }
+
+    .download-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(37, 99, 235, 0.4);
+    }
+
     .footer {
       font-size: 0.75rem;
       color: #6b7280;
+      margin-top: 30px;
     }
   </style>
 </head>
+
 <body>
   <div class="card">
     <div class="card-header">
@@ -191,7 +298,7 @@ void handleRoot() {
         <h1>
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+              d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
           </svg>
           Nível de Ruído
         </h1>
@@ -200,16 +307,34 @@ void handleRoot() {
       <div class="icon-bg">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
         </svg>
       </div>
     </div>
 
     <div class="content">
-      <div class="circle">
-        <span>67</span>
+      <div class="circle )rawliteral";
+  
+  if (totalRegistros > 0) {
+    int ultimoIdx = (registroIndex - 1 + MAX_REGISTROS) % MAX_REGISTROS;
+    html += getCircleClass(registros[ultimoIdx].status);
+  } else {
+    html += "circle-blue";
+  }
+  
+  html += R"rawliteral(">
+        <span>)rawliteral";
+  
+  if (totalRegistros > 0) {
+    int ultimoIdx = (registroIndex - 1 + MAX_REGISTROS) % MAX_REGISTROS;
+    html += String(registros[ultimoIdx].mediaAmplitude);
+  } else {
+    html += String(ultimaMedia);
+  }
+  
+  html += R"rawliteral(</span>
       </div>
-      <p class="subtitle">Decibéis (dB)</p>
+      <p class="subtitle">Nível de ruído</p>
 
       <div class="status">
         <div class="status-box">
@@ -219,11 +344,70 @@ void handleRoot() {
       </div>
 
       <div class="description">
-        Monitoramento de ruído ambiente em tempo real para controle de qualidade e conforto acústico.
+        Monitoramento de ruído ambiente em tempo real para controle de qualidade e conforto acústico da escola e
+        faculdade Senai Roberto Mange.
+      </div>
+
+      <div class="updates-section">
+        <div class="updates-title">Últimas atualizações</div>
+        )rawliteral";
+
+  int numUpdates = min(totalRegistros, 5);
+  if (numUpdates > 0) {
+    for (int i = 0; i < numUpdates; i++) {
+      int idx = (registroIndex - 1 - i + MAX_REGISTROS) % MAX_REGISTROS;
+      html += "<div class='update-item'>";
+      html += "<div>";
+      html += "<div class='update-value'>" + String(registros[idx].mediaAmplitude) + " Nível Ruído</div>";
+      html += "<div class='update-time'>" + registros[idx].dataHora + "</div>";
+      html += "</div>";
+      html += "<div class='update-status ";
+      
+      if (registros[idx].status == "BAIXO") html += "status-baixo";
+      else if (registros[idx].status == "MÉDIO") html += "status-medio";
+      else html += "status-alto";
+      
+      html += "'>" + registros[idx].status + "</div>";
+      html += "</div>";
+    }
+  } else {
+    html += "<div style='text-align: center; color: #64748b; font-size: 0.9rem;'>Nenhuma atualização disponível</div>";
+  }
+
+  html += R"rawliteral(
+      </div>
+
+      <button class="download-btn" onclick="window.location.href='/download'">
+        📥 Baixar dados completos (CSV)
+      </button>
+
+      <div style="margin-top: 2rem;">
+        <h3 style="color: #475569; margin-bottom: 1rem; text-align: center;">Responsáveis</h3>
+        <div style="display: flex; justify-content: space-around; align-items: center; margin-bottom: 1rem;">
+          <div class="circle circle-pink" style="width: 50px; height: 50px; margin: 0;">
+            <span style="font-size: 1.4rem;">M</span>
+          </div>
+          <div class="circle circle-orange" style="width: 50px; height: 50px; margin: 0;">
+            <span style="font-size: 1.4rem;">L</span>
+          </div>
+        </div>
+        <div style="display: flex; justify-content: space-around; color: #64748b; font-size: 0.7rem;">
+          <span>Maria Eduarda</span>
+          <span>Lucas Camargo</span>
+        </div>
       </div>
 
       <div class="footer">
-        Última atualização: <!--%HORA%-->
+        Última atualização: )rawliteral";
+  
+  if (totalRegistros > 0) {
+    int ultimoIdx = (registroIndex - 1 + MAX_REGISTROS) % MAX_REGISTROS;
+    html += registros[ultimoIdx].dataHora;
+  } else {
+    html += "N/A";
+  }
+  
+  html += R"rawliteral(
       </div>
     </div>
   </div>
@@ -234,15 +418,13 @@ void handleRoot() {
   server.send(200, "text/html", html);
 }
 
-
-// -------------------- CSV para download --------------------
 void handleDownload() {
-  String csv = "Data/Hora,Media da Amplitude (10s)\n";
+  String csv = "Data/Hora,Media da Amplitude (10s),Status\n";
   if (totalRegistros > 0) {
     int start = (registroIndex - totalRegistros + MAX_REGISTROS) % MAX_REGISTROS;
     for (int i = 0; i < totalRegistros; i++) {
       int idx = (start + i) % MAX_REGISTROS;
-      csv += registros[idx].dataHora + "," + String(registros[idx].mediaAmplitude) + "\n";
+      csv += registros[idx].dataHora + "," + String(registros[idx].mediaAmplitude) + "," + registros[idx].status + "\n";
     }
   }
   server.sendHeader("Content-Type", "text/csv");
@@ -250,7 +432,6 @@ void handleDownload() {
   server.send(200, "text/csv", csv);
 }
 
-// -------------------- Setup --------------------
 void setup() {
   Serial.begin(115200);
   analogReadResolution(12);
@@ -273,7 +454,6 @@ void setup() {
   inicioPeriodo = millis();
 }
 
-// -------------------- Loop principal --------------------
 void loop() {
   int valorMin = 4095;
   int valorMax = 0;
@@ -304,27 +484,37 @@ void loop() {
       dataHora = String(timeStringBuff);
     }
 
+    String status;
+    if (mediaAmplitude < LIMITE_BAIXO) {
+      status = "BAIXO";
+    } else if (mediaAmplitude < LIMITE_ALTO) {
+      status = "MÉDIO";
+    } else {
+      status = "ALTO";
+    }
+
     registros[registroIndex].mediaAmplitude = mediaAmplitude;
     registros[registroIndex].dataHora = dataHora;
+    registros[registroIndex].status = status;
     registroIndex = (registroIndex + 1) % MAX_REGISTROS;
     if (totalRegistros < MAX_REGISTROS) totalRegistros++;
+
+    ultimaMedia = mediaAmplitude;
 
     Serial.print("📊 Média da amplitude (10s): ");
     Serial.print(mediaAmplitude);
     Serial.print(" → ");
+    Serial.println(status);
 
-    if (mediaAmplitude < LIMITE_BAIXO) {
-      Serial.println("BAIXO");
+    if (status == "BAIXO") {
       digitalWrite(LED_BAIXO, HIGH);
       delay(500);
       digitalWrite(LED_BAIXO, LOW);
-    } else if (mediaAmplitude < LIMITE_ALTO) {
-      Serial.println("MÉDIO");
+    } else if (status == "MÉDIO") {
       digitalWrite(LED_MEDIO, HIGH);
       delay(500);
       digitalWrite(LED_MEDIO, LOW);
     } else {
-      Serial.println("ALTO");
       digitalWrite(LED_ALTO, HIGH);
       delay(500);
       digitalWrite(LED_ALTO, LOW);
